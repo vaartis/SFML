@@ -339,6 +339,7 @@ Image Texture::copyToImage() const
     // from a texture is to bind it to a FBO and use glReadPixels
     GLuint frameBuffer = 0;
     glCheck(GLEXT_glGenFramebuffers(1, &frameBuffer));
+
     if (frameBuffer)
     {
         GLint previousFrameBuffer;
@@ -346,10 +347,10 @@ Image Texture::copyToImage() const
 
         glCheck(GLEXT_glBindFramebuffer(GLEXT_GL_FRAMEBUFFER, frameBuffer));
         glCheck(GLEXT_glFramebufferTexture2D(GLEXT_GL_FRAMEBUFFER, GLEXT_GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_texture, 0));
-        glCheck(glReadPixels(0, 0, m_size.x, m_size.y, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data()));
+        glCheck(glReadPixels(0, 0, static_cast<GLint>(m_size.x), static_cast<GLint>(m_size.y), GL_RGBA, GL_UNSIGNED_BYTE, pixels.data()));
         glCheck(GLEXT_glDeleteFramebuffers(1, &frameBuffer));
 
-        glCheck(GLEXT_glBindFramebuffer(GLEXT_GL_FRAMEBUFFER, previousFrameBuffer));
+        glCheck(GLEXT_glBindFramebuffer(GLEXT_GL_FRAMEBUFFER, static_cast<GLuint>(previousFrameBuffer)));
     }
 
 #else

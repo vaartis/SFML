@@ -68,7 +68,11 @@ function(set_target_warnings target)
         -Wimplicit-fallthrough # warn when a missing break causes control flow to continue at the next case in a switch statement
         -Wsuggest-override # warn when 'override' could be used on a member function overriding a virtual function
         ${NON_ANDROID_CLANG_AND_GCC_WARNINGS}
-    )
+        )
+    if(SFML_OS_EMSCRIPTEN)
+        # Emscripten compiles libraries that use this style of cast
+        list(REMOVE_ITEM CLANG_AND_GCC_WARNINGS -Wold-style-cast)
+    endif()
 
     if(WARNINGS_AS_ERRORS)
         set(CLANG_AND_GCC_WARNINGS ${CLANG_AND_GCC_WARNINGS} -Werror)

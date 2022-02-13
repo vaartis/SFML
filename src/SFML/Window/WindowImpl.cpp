@@ -44,7 +44,8 @@
     #include <SFML/Window/Win32/VulkanImplWin32.hpp>
     using VulkanImplType = sf::priv::VulkanImplWin32;
 
-#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)
+#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)\
+    || defined(SFML_SYSTEM_EMSCRIPTEN)
 
     #if defined(SFML_USE_DRM)
 
@@ -62,6 +63,12 @@
         using VulkanImplType = sf::priv::VulkanImplX11;
 
     #endif
+
+#elif defined(SFML_SYSTEM_EMSCRIPTEN)
+    #include <SFML/Window/Emscripten/WindowImplEmscripten.hpp>
+    using WindowImplType = sf::priv::WindowImplEmscripten;
+
+    #define SFML_VULKAN_IMPLEMENTATION_NOT_AVAILABLE
 
 #elif defined(SFML_SYSTEM_MACOS)
 

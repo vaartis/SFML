@@ -63,7 +63,7 @@ macro(sfml_add_library module)
 
     # create the target
     string(TOLOWER sfml-${module} target)
-    if (THIS_STATIC)
+    if (THIS_STATIC OR SFML_OS_EMSCRIPTEN)
         add_library(${target} STATIC ${THIS_SOURCES})
     else()
         add_library(${target} ${THIS_SOURCES})
@@ -286,6 +286,10 @@ macro(sfml_add_example target)
         add_executable(${target} ${target_input})
     endif()
 
+    if (SFML_OS_EMSCRIPTEN AND DEFINED THIS_RESOURCES_DIR)
+        target_link_options(${target} PRIVATE --preload-file ${SRCROOT}/${THIS_RESOURCES_DIR}@${THIS_RESOURCES_DIR})
+    endif()
+
     set_target_warnings(${target})
 
     # set the debug suffix
@@ -420,6 +424,10 @@ function(sfml_find_package)
     endif()
 
     set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/Modules/")
+    if (SFML_OS_EMSCRIPTEN)
+        list(PREPEND CMAKE_MODULE_PATH "$ENV{EMSCRIPTEN}/cmake/Modules/")
+    endif()
+
     if (SFML_OS_IOS)
         find_host_package(${target} REQUIRED)
     else()
@@ -431,7 +439,11 @@ function(sfml_find_package)
     set(LINK_LIST "")
     if (THIS_LINK)
         foreach(link_item IN LISTS THIS_LINK)
-            list(APPEND LINK_LIST "${${link_item}}")
+            # Emscripten declares OpenGL library as "nul" for some reason.
+            # It's supposed to mean there's no need to link to anything explicitly.
+            if(NOT "${${link_item}}" STREQUAL "nul")
+                list(APPEND LINK_LIST "${${link_item}}")
+            endif()
         endforeach()
     endif()
 

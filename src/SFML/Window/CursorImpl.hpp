@@ -32,7 +32,8 @@
 
 #if defined(SFML_SYSTEM_WINDOWS)
     #include <SFML/Window/Win32/CursorImpl.hpp>
-#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)
+#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)\
+    || defined(SFML_SYSTEM_EMSCRIPTEN)
     #if defined(SFML_USE_DRM)
         #include <SFML/Window/DRM/CursorImpl.hpp>
     #else

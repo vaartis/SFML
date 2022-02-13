@@ -35,7 +35,8 @@
 
     #include <SFML/Window/Win32/SensorImpl.hpp>
 
-#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)
+#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)\
+    || defined(SFML_SYSTEM_EMSCRIPTEN)
 
     #include <SFML/Window/Unix/SensorImpl.hpp>
 

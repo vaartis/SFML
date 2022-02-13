@@ -28,6 +28,7 @@
 #include <SFML/Graphics/RenderTextureImplFBO.hpp>
 #include <SFML/Graphics/Texture.hpp>
 #include <SFML/Graphics/GLCheck.hpp>
+#include <SFML/Graphics/GLExtensions.hpp>
 #include <SFML/Window/Context.hpp>
 #include <SFML/Window/ContextSettings.hpp>
 #include <SFML/System/Err.hpp>
@@ -37,7 +38,6 @@
 #include <unordered_set>
 #include <utility>
 #include <ostream>
-
 
 namespace
 {
@@ -230,7 +230,7 @@ bool RenderTextureImplFBO::create(unsigned int width, unsigned int height, unsig
         if (settings.stencilBits && !GLEXT_packed_depth_stencil)
             return false;
 
-        m_sRgb = settings.sRgbCapable && GL_EXT_texture_sRGB;
+        m_sRgb = settings.sRgbCapable && GLEXT_texture_sRGB;
 
 #ifndef SFML_OPENGL_ES
 
@@ -388,7 +388,7 @@ bool RenderTextureImplFBO::create(unsigned int width, unsigned int height, unsig
     if (createFrameBuffer())
     {
         // Restore previously bound framebuffer
-        glCheck(GLEXT_glBindFramebuffer(GLEXT_GL_FRAMEBUFFER, frameBuffer));
+        glCheck(GLEXT_glBindFramebuffer(GLEXT_GL_FRAMEBUFFER, static_cast<GLuint>(frameBuffer)));
 
         return true;
     }

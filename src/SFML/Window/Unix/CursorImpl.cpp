@@ -29,10 +29,10 @@
 #include <SFML/Window/Unix/Display.hpp>
 #include <X11/cursorfont.h>
 #include <X11/Xutil.h>
-#include <X11/Xcursor/Xcursor.h>
 #include <cassert>
 #include <cstdlib>
 #include <vector>
+#include <X11/Xcursor/Xcursor.h>
 
 namespace sf
 {
@@ -197,7 +197,8 @@ bool CursorImpl::loadFromSystem(Cursor::Type type)
 ////////////////////////////////////////////////////////////
 bool CursorImpl::isColorCursorSupported()
 {
-    return XcursorSupportsARGB(m_display);
+    return false;
+    // return XcursorSupportsARGB(m_display);
 }
 
 
@@ -215,4 +216,3 @@ void CursorImpl::release()
 } // namespace priv
 
 } // namespace sf
-

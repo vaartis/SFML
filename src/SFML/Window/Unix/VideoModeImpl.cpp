@@ -29,10 +29,12 @@
 #include <SFML/Window/Unix/Display.hpp>
 #include <SFML/System/Err.hpp>
 #include <X11/Xlib.h>
-#include <X11/extensions/Xrandr.h>
 #include <algorithm>
 #include <ostream>
 
+#ifndef SFML_SYSTEM_EMSCRIPTEN
+#include <X11/extensions/Xrandr.h>
+#endif
 
 namespace sf
 {
@@ -47,6 +49,7 @@ std::vector<VideoMode> VideoModeImpl::getFullscreenModes()
     Display* display = OpenDisplay();
     if (display)
     {
+        /*
         // Retrieve the default screen number
         int screen = DefaultScreen(display);
 
@@ -109,6 +112,7 @@ std::vector<VideoMode> VideoModeImpl::getFullscreenModes()
             // XRandr extension is not supported: we cannot get the video modes
             err() << "Failed to use the XRandR extension while trying to get the supported video modes" << std::endl;
         }
+        */
 
         // Close the connection with the X server
         CloseDisplay(display);
@@ -139,6 +143,7 @@ VideoMode VideoModeImpl::getDesktopMode()
         int version;
         if (XQueryExtension(display, "RANDR", &version, &version, &version))
         {
+            /*
             // Get the current configuration
             XRRScreenConfiguration* config = XRRGetScreenInfo(display, RootWindow(display, screen));
             if (config)
@@ -171,6 +176,7 @@ VideoMode VideoModeImpl::getDesktopMode()
                 // Failed to get the screen configuration
                 err() << "Failed to retrieve the screen configuration while trying to get the desktop video modes" << std::endl;
             }
+            */
         }
         else
         {

@@ -41,7 +41,6 @@
 #include <ostream>
 #include <cassert>
 
-
 namespace
 {
     // A nested named namespace is used here to allow unity builds of SFML.

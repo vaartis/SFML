@@ -56,8 +56,8 @@ int main()
     glDepthMask(GL_TRUE);
 
     // Disable lighting and texturing
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
+    //glDisable(GL_LIGHTING);
+    //glDisable(GL_TEXTURE_2D);
 
     // Configure the viewport (the same size as the window)
     glViewport(0, 0, static_cast<GLsizei>(window.getSize().x), static_cast<GLsizei>(window.getSize().y));

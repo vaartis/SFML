@@ -33,9 +33,14 @@
 #include <SFML/Window/EGLCheck.hpp>
 #include <SFML/Window/GlContext.hpp>
 #include <SFML/Window/WindowStyle.hpp> // Prevent conflict with macro None from Xlib
+
 #include <glad/egl.h>
-#if defined(SFML_SYSTEM_LINUX) && !defined(SFML_USE_DRM)
+
+#if (defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_EMSCRIPTEN)) && !defined(SFML_USE_DRM)
     #include <X11/Xlib.h>
+#endif
+#ifdef SFML_SYSTEM_EMSCRIPTEN
+    #include <X11/Xutil.h>
 #endif
 
 namespace sf
@@ -165,7 +170,7 @@ public:
     ////////////////////////////////////////////////////////////
     static EGLConfig getBestConfig(EGLDisplay display, unsigned int bitsPerPixel, const ContextSettings& settings);
 
-#if defined(SFML_SYSTEM_LINUX) && !defined(SFML_USE_DRM)
+#if (defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_EMSCRIPTEN)) && !defined(SFML_USE_DRM)
     ////////////////////////////////////////////////////////////
     /// \brief Select the best EGL visual for a given set of settings
     ///

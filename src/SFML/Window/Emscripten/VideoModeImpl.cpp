@@ -22,29 +22,41 @@
 //
 ////////////////////////////////////////////////////////////
 
-#ifndef SFML_INPUTIMPL_HPP
-#define SFML_INPUTIMPL_HPP
-
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Config.hpp>
+#include <SFML/Window/VideoModeImpl.hpp>
+#include <SFML/Window/Unix/Display.hpp>
+#include <SFML/System/Err.hpp>
+#include <algorithm>
 
-#if defined(SFML_SYSTEM_WINDOWS)
-    #include <SFML/Window/Win32/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)\
-    || defined(SFML_SYSTEM_EMSCRIPTEN)
-    #if defined(SFML_USE_DRM)
-        #include <SFML/Window/DRM/InputImplUDev.hpp>
-    #else
-        #include <SFML/Window/Unix/InputImpl.hpp>
-    #endif
-#elif defined(SFML_SYSTEM_MACOS)
-    #include <SFML/Window/OSX/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_IOS)
-    #include <SFML/Window/iOS/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_ANDROID)
-    #include <SFML/Window/Android/InputImpl.hpp>
-#endif
+#include <emscripten.h>
 
-#endif // SFML_INPUTIMPL_HPP
+namespace sf
+{
+namespace priv
+{
+////////////////////////////////////////////////////////////
+std::vector<VideoMode> VideoModeImpl::getFullscreenModes()
+{
+    Int32 width, height;
+    emscripten_get_screen_size(&width, &height);
+
+    // WebGL spec says depth is at least 16
+    return { VideoMode(static_cast<Uint32>(width), static_cast<Uint32>(height), 16) };
+}
+
+
+////////////////////////////////////////////////////////////
+VideoMode VideoModeImpl::getDesktopMode()
+{
+    Int32 width, height;
+    emscripten_get_screen_size(&width, &height);
+
+    // WebGL spec says depth is at least 16
+    return VideoMode(static_cast<Uint32>(width), static_cast<Uint32>(height), 16);
+}
+
+} // namespace priv
+
+} // namespace sf

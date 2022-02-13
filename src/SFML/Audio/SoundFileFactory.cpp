@@ -26,13 +26,19 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Audio/SoundFileFactory.hpp>
-#include <SFML/Audio/SoundFileReaderFlac.hpp>
-#include <SFML/Audio/SoundFileWriterFlac.hpp>
-#include <SFML/Audio/SoundFileReaderMp3.hpp>
+//#include <SFML/Audio/SoundFileReaderFlac.hpp>
+//#include <SFML/Audio/SoundFileWriterFlac.hpp>
+//#include <SFML/Audio/SoundFileReaderMp3.hpp>
 #include <SFML/Audio/SoundFileReaderOgg.hpp>
 #include <SFML/Audio/SoundFileWriterOgg.hpp>
 #include <SFML/Audio/SoundFileReaderWav.hpp>
 #include <SFML/Audio/SoundFileWriterWav.hpp>
+
+#if !defined(SFML_SYSTEM_EMSCRIPTEN)
+#include <SFML/Audio/SoundFileReaderFlac.hpp>
+#include <SFML/Audio/SoundFileWriterFlac.hpp>
+#endif
+
 #include <SFML/System/FileInputStream.hpp>
 #include <SFML/System/MemoryInputStream.hpp>
 #include <SFML/System/Err.hpp>
@@ -48,9 +54,12 @@ namespace
         static bool registered = false;
         if (!registered)
         {
+            #if !defined(SFML_SYSTEM_EMSCRIPTEN)
             sf::SoundFileFactory::registerReader<sf::priv::SoundFileReaderFlac>();
             sf::SoundFileFactory::registerWriter<sf::priv::SoundFileWriterFlac>();
             sf::SoundFileFactory::registerReader<sf::priv::SoundFileReaderMp3>();
+            #endif
+
             sf::SoundFileFactory::registerReader<sf::priv::SoundFileReaderOgg>();
             sf::SoundFileFactory::registerWriter<sf::priv::SoundFileWriterOgg>();
             sf::SoundFileFactory::registerReader<sf::priv::SoundFileReaderWav>();

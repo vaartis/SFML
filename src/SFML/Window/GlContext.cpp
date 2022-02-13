@@ -30,6 +30,7 @@
 #include <SFML/Window/EglContext.hpp>
 #include <SFML/System/Err.hpp>
 #include <glad/gl.h>
+
 #include <algorithm>
 #include <iomanip>
 #include <memory>
@@ -59,7 +60,8 @@
 
     #endif
 
-#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)
+#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)\
+    || defined(SFML_SYSTEM_EMSCRIPTEN)
 
     #if defined(SFML_OPENGL_ES)
 
@@ -838,7 +840,12 @@ void GlContext::initialize(const ContextSettings& requestedSettings)
 
     m_settings.attributeFlags = ContextSettings::Default;
 
-    if (m_settings.majorVersion >= 3)
+
+    bool emscripten = false;
+#ifdef SFML_SYSTEM_EMSCRIPTEN
+    emscripten = true;
+#endif
+    if (m_settings.majorVersion >= 3 && !emscripten)
     {
         // Retrieve the context flags
         int flags = 0;
@@ -870,7 +877,7 @@ void GlContext::initialize(const ContextSettings& requestedSettings)
                 }
             }
         }
-        else if ((m_settings.majorVersion > 3) || (m_settings.minorVersion >= 2))
+        else if (emscripten || (m_settings.majorVersion > 3) || (m_settings.minorVersion >= 2))
         {
             // Retrieve the context profile
             int profile = 0;

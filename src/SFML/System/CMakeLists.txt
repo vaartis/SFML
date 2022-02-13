@@ -47,6 +47,16 @@ else()
         ${SRCROOT}/Unix/SleepImpl.hpp
     )
 
+    if(SFML_OS_EMSCRIPTEN)
+        set(PLATFORM_SRC ${PLATFORM_SRC}
+            ${SRCROOT}/Emscripten/SleepImpl.cpp
+            ${SRCROOT}/Emscripten/SleepImpl.hpp)
+    else()
+        set(PLATFORM_SRC ${PLATFORM_SRC}
+            ${SRCROOT}/Unix/SleepImpl.cpp
+            ${SRCROOT}/Unix/SleepImpl.hpp)
+    endif()
+
     if(SFML_OS_ANDROID)
         set(PLATFORM_SRC ${PLATFORM_SRC}
             ${SRCROOT}/Android/Activity.hpp

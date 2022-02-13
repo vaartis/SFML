@@ -1,3 +1,8 @@
+if(SFML_OS_EMSCRIPTEN)
+    set(CMAKE_EXECUTABLE_SUFFIX ".html")
+    add_link_options(--emrun)
+endif()
+
 # CLI based examples
 if (NOT SFML_OS_IOS)
     if(SFML_BUILD_NETWORK)

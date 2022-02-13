@@ -35,8 +35,17 @@
 #ifdef SFML_SYSTEM_ANDROID
     #include <SFML/System/Android/Activity.hpp>
 #endif
-#if defined(SFML_SYSTEM_LINUX) && !defined(SFML_USE_DRM)
+#if (defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_EMSCRIPTEN)) && !defined(SFML_USE_DRM)
     #include <X11/Xlib.h>
+#endif
+
+#ifdef SFML_SYSTEM_EMSCRIPTEN
+//#include <X11/Xutil.h>
+    #include <emscripten.h>
+
+    #define GLFW_INCLUDE_NONE 1
+    #include <GLFW/glfw3.h>
+//#include <EGL/egl.h>
 #endif
 
 // We check for this definition in order to avoid multiple definitions of GLAD
@@ -46,6 +55,10 @@
 #define SF_GLAD_EGL_IMPLEMENTATION
 #include <glad/egl.h>
 #endif
+
+#include "SFML/System/Err.hpp"
+
+#include <iostream>
 
 namespace
 {
@@ -63,13 +76,15 @@ namespace
             return states.display;
 
 #endif
-
             static EGLDisplay display = EGL_NO_DISPLAY;
 
             if (display == EGL_NO_DISPLAY)
             {
+                sf::err() << "Test1" << std::endl;
                 eglCheck(display = eglGetDisplay(EGL_DEFAULT_DISPLAY));
+                sf::err() << "Test2" << std::endl;
                 eglCheck(eglInitialize(display, nullptr, nullptr));
+                sf::err() << "Test3" << std::endl;
             }
 
             return display;
@@ -84,12 +99,20 @@ namespace
             {
                 initialized = true;
 
+#ifdef SFML_SYSTEM_EMSCRIPTEN
+                int egl_version = gladLoadEGL(EGL_NO_DISPLAY, glfwGetProcAddress);
+                printf("GLES %d.%d\n", GLAD_VERSION_MAJOR(egl_version), GLAD_VERSION_MINOR(egl_version));
+
+                // Continue loading with a display
+                sf::err() << gladLoadEGL(getInitializedDisplay(), glfwGetProcAddress) << std::endl;
+#else
                 // We don't check the return value since the extension
                 // flags are cleared even if loading fails
                 gladLoaderLoadEGL(EGL_NO_DISPLAY);
 
                 // Continue loading with a display
                 gladLoaderLoadEGL(getInitializedDisplay());
+#endif
             }
         }
     }
@@ -116,6 +139,7 @@ m_config  (nullptr)
     m_config = getBestConfig(m_display, VideoMode::getDesktopMode().bitsPerPixel, ContextSettings());
     updateSettings();
 
+#ifndef SFML_SYSTEM_EMSCRIPTEN
     // Note: The EGL specs say that attrib_list can be a null pointer when passed to eglCreatePbufferSurface,
     // but this is resulting in a segfault. Bug in Android?
     EGLint attrib_list[] = {
@@ -125,6 +149,9 @@ m_config  (nullptr)
     };
 
     eglCheck(m_surface = eglCreatePbufferSurface(m_display, m_config, attrib_list));
+#else
+    createSurface(static_cast<EGLNativeWindowType>(0));
+#endif
 
     // Create EGL context
     createContext(shared);
@@ -163,7 +190,7 @@ m_config  (nullptr)
 #if !defined(SFML_SYSTEM_ANDROID)
     // Create EGL surface (except on Android because the window is created
     // asynchronously, its activity manager will call it for us)
-    createSurface(owner.getSystemHandle());
+    createSurface(static_cast<EGLNativeWindowType>(owner.getSystemHandle()));
 #else
     (void) owner;
 #endif
@@ -261,7 +288,7 @@ void EglContext::setVerticalSyncEnabled(bool enabled)
 void EglContext::createContext(EglContext* shared)
 {
     const EGLint contextVersion[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 1,
+        EGL_CONTEXT_CLIENT_VERSION, 2,
         EGL_NONE
     };
 
@@ -361,7 +388,7 @@ void EglContext::updateSettings()
 }
 
 
-#if defined(SFML_SYSTEM_LINUX) && !defined(SFML_USE_DRM)
+#if (defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_EMSCRIPTEN)) && !defined(SFML_USE_DRM)
 ////////////////////////////////////////////////////////////
 XVisualInfo EglContext::selectBestVisual(::Display* XDisplay, unsigned int bitsPerPixel, const ContextSettings& settings)
 {

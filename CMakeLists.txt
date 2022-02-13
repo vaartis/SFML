@@ -264,6 +264,15 @@ if(SFML_OS_MACOSX)
     set(XCODE_TEMPLATES_ARCH "\$(NATIVE_ARCH_ACTUAL)")
 endif()
 
+if(SFML_OS_EMSCRIPTEN)
+    add_compile_options(-pthread "SHELL:-s" "SHELL:-g" "SHELL:-s -O1")
+    add_link_options(-pthread
+        "SHELL:-s ASYNCIFY=1" "SHELL:-s ERROR_ON_UNDEFINED_SYMBOLS=0"
+        "SHELL:--source-map-base 'http://localhost:6931/../../../'" "SHELL:-gsource-map"
+        "SHELL:-s MAX_WEBGL_VERSION=2" "SHELL:-s ASSERTIONS=2" "SHELL:-s GL_ASSERTIONS=1"
+        "SHELL:-s -O1" "SHELL:-s FULL_ES2=1")
+endif()
+
 # enable project folders
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")

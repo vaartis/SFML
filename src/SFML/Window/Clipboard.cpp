@@ -35,14 +35,22 @@ namespace sf
 ////////////////////////////////////////////////////////////
 String Clipboard::getString()
 {
+#ifndef SFML_SYSTEM_EMSCRIPTEN
     return priv::ClipboardImpl::getString();
+#else
+    return String();
+#endif
 }
 
 
 ////////////////////////////////////////////////////////////
 void Clipboard::setString(const String& text)
 {
+#ifndef SFML_SYSTEM_EMSCRIPTEN
     return priv::ClipboardImpl::setString(text);
+#else
+    (void)text;
+#endif
 }
 
 } // namespace sf

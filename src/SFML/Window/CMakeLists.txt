@@ -81,7 +81,7 @@ if(SFML_OS_WINDOWS)
 
     # make sure that we use the Unicode version of the Win API functions
     add_definitions(-DUNICODE -D_UNICODE)
-elseif(SFML_OS_LINUX OR SFML_OS_FREEBSD OR SFML_OS_OPENBSD OR SFML_OS_NETBSD)
+elseif(SFML_OS_LINUX OR SFML_OS_FREEBSD OR SFML_OS_OPENBSD OR SFML_OS_NETBSD OR SFML_OS_EMSCRIPTEN)
     if(SFML_USE_DRM)
         add_definitions(-DSFML_USE_DRM)
         set(PLATFORM_SRC
@@ -103,8 +103,6 @@ elseif(SFML_OS_LINUX OR SFML_OS_FREEBSD OR SFML_OS_OPENBSD OR SFML_OS_NETBSD)
     else()
         set(PLATFORM_SRC
             ${PLATFORM_SRC}
-            ${SRCROOT}/Unix/CursorImpl.hpp
-            ${SRCROOT}/Unix/CursorImpl.cpp
             ${SRCROOT}/Unix/ClipboardImpl.hpp
             ${SRCROOT}/Unix/ClipboardImpl.cpp
             ${SRCROOT}/Unix/InputImpl.cpp
@@ -115,13 +113,21 @@ elseif(SFML_OS_LINUX OR SFML_OS_FREEBSD OR SFML_OS_OPENBSD OR SFML_OS_NETBSD)
             ${SRCROOT}/Unix/Display.hpp
             ${SRCROOT}/Unix/GlxContext.cpp
             ${SRCROOT}/Unix/GlxContext.hpp
-            ${SRCROOT}/Unix/VideoModeImpl.cpp
-            ${SRCROOT}/Unix/VulkanImplX11.cpp
-            ${SRCROOT}/Unix/VulkanImplX11.hpp
-            ${SRCROOT}/Unix/WindowImplX11.cpp
-            ${SRCROOT}/Unix/WindowImplX11.hpp
         )
+        if(NOT SFML_OS_EMSCRIPTEN)
+            set(PLATFORM_SRC
+                ${PLATFORM_SRC}
+                ${SRCROOT}/Unix/CursorImpl.hpp
+                ${SRCROOT}/Unix/CursorImpl.cpp
+                ${SRCROOT}/Unix/VideoModeImpl.cpp
+                ${SRCROOT}/Unix/VulkanImplX11.cpp
+                ${SRCROOT}/Unix/VulkanImplX11.hpp
+                ${SRCROOT}/Unix/WindowImplX11.cpp
+                ${SRCROOT}/Unix/WindowImplX11.hpp
+            )
+        endif()
     endif()
+
     if(SFML_OS_LINUX)
         set(PLATFORM_SRC
             ${PLATFORM_SRC}
@@ -146,7 +152,15 @@ elseif(SFML_OS_LINUX OR SFML_OS_FREEBSD OR SFML_OS_OPENBSD OR SFML_OS_NETBSD)
             ${SRCROOT}/NetBSD/JoystickImpl.cpp
             ${SRCROOT}/NetBSD/JoystickImpl.hpp
         )
-
+    elseif(SFML_OS_EMSCRIPTEN)
+        set(PLATFORM_SRC
+            ${PLATFORM_SRC}
+            ${SRCROOT}/Emscripten/VideoModeImpl.cpp
+            ${SRCROOT}/Emscripten/JoystickImpl.cpp
+            ${SRCROOT}/Emscripten/JoystickImpl.hpp
+            ${SRCROOT}/Emscripten/WindowImplEmscripten.cpp
+            ${SRCROOT}/Emscripten/WindowImplEmscripten.hpp
+        )
     endif()
     source_group("unix" FILES ${PLATFORM_SRC})
 elseif(SFML_OS_MACOSX)
@@ -296,9 +310,11 @@ elseif(SFML_OS_ANDROID)
     sfml_find_package(EGL INCLUDE "EGL_INCLUDE_DIR" LINK "EGL_LIBRARY")
     target_link_libraries(sfml-window PRIVATE EGL)
     target_link_libraries(sfml-window PRIVATE GLES)
-else()
+elseif(NOT SFML_OS_EMSCRIPTEN)
     sfml_find_package(OpenGL INCLUDE "OPENGL_INCLUDE_DIR" LINK "OPENGL_gl_LIBRARY")
     target_link_libraries(sfml-window PRIVATE OpenGL)
+elseif(SFML_OS_EMSCRIPTEN)
+    target_link_libraries(sfml-window PUBLIC GL EGL GLESv2)
 endif()
 
 if(SFML_OS_WINDOWS AND NOT SFML_COMPILER_MSVC)

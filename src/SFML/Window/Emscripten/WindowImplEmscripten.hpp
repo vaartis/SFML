@@ -22,8 +22,8 @@
 //
 ////////////////////////////////////////////////////////////
 
-#ifndef SFML_WINDOWIMPLX11_HPP
-#define SFML_WINDOWIMPLX11_HPP
+#ifndef SFML_WINDOWIMPL_EMSCRIPTEN_HPP
+#define SFML_WINDOWIMPL_EMSCRIPTEN_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
@@ -34,9 +34,8 @@
 #include <X11/Xlib.h>
 #include <deque>
 
-#if !defined(SFML_SYSTEM_EMSCRIPTEN)
-#include <X11/extensions/Xrandr.h>
-#endif
+#include <emscripten.h>
+#include <GLFW/glfw3.h>
 
 namespace sf
 {
@@ -46,7 +45,7 @@ namespace priv
 /// \brief Linux (X11) implementation of WindowImpl
 ///
 ////////////////////////////////////////////////////////////
-class WindowImplX11 : public WindowImpl
+class WindowImplEmscripten : public WindowImpl
 {
 public:
 
@@ -56,7 +55,7 @@ public:
     /// \param handle Platform-specific handle of the control
     ///
     ////////////////////////////////////////////////////////////
-    WindowImplX11(WindowHandle handle);
+    //WindowImplEmscripten(WindowHandle handle);
 
     ////////////////////////////////////////////////////////////
     /// \brief Create the window implementation
@@ -67,13 +66,13 @@ public:
     /// \param settings Additional settings for the underlying OpenGL context
     ///
     ////////////////////////////////////////////////////////////
-    WindowImplX11(VideoMode mode, const String& title, unsigned long style, const ContextSettings& settings);
+    WindowImplEmscripten(VideoMode mode, const String& title, unsigned long style, const ContextSettings& settings);
 
     ////////////////////////////////////////////////////////////
     /// \brief Destructor
     ///
     ////////////////////////////////////////////////////////////
-    ~WindowImplX11();
+    ~WindowImplEmscripten();
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the OS-specific handle of the window
@@ -225,12 +224,6 @@ private:
     void switchToFullscreen();
 
     ////////////////////////////////////////////////////////////
-    /// \brief Set the WM protocols we support
-    ///
-    ////////////////////////////////////////////////////////////
-    void setProtocols();
-
-    ////////////////////////////////////////////////////////////
     /// \brief Update the last time we received user input
     ///
     /// \param time Last time we received user input
@@ -243,12 +236,6 @@ private:
     ///
     ////////////////////////////////////////////////////////////
     void initialize();
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Create a transparent mouse cursor
-    ///
-    ////////////////////////////////////////////////////////////
-    void createHiddenCursor();
 
     ////////////////////////////////////////////////////////////
     /// \brief Cleanup graphical resources attached to the window
@@ -302,6 +289,7 @@ private:
     // Member data
     ////////////////////////////////////////////////////////////
     ::Window           m_window;         ///< X identifier defining our window
+    GLFWwindow*        m_glfwWindow;
     ::Display*         m_display;        ///< Pointer to the display
     int                m_screen;         ///< Screen identifier
     XIM                m_inputMethod;    ///< Input method linked to the X display
@@ -309,16 +297,8 @@ private:
     std::deque<XEvent> m_events;         ///< Queue we use to store pending events for this window
     bool               m_isExternal;     ///< Tell whether the window has been created externally or by SFML
 
-#ifndef SFML_SYSTEM_EMSCRIPTEN
-    RRMode             m_oldVideoMode;   ///< Video mode in use before we switch to fullscreen
-    RRCrtc             m_oldRRCrtc;      ///< RRCrtc in use before we switch to fullscreen
-#endif
-
-    ::Cursor           m_hiddenCursor;   ///< As X11 doesn't provide cursor hiding, we must create a transparent one
-    ::Cursor           m_lastCursor;     ///< Last cursor used -- this data is not owned by the window and is required to be always valid
     bool               m_keyRepeat;      ///< Is the KeyRepeat feature enabled?
     Vector2i           m_previousSize;   ///< Previous size of the window, to find if a ConfigureNotify event is a resize event (could be a move event only)
-    bool               m_useSizeHints;   ///< Is the size of the window fixed with size hints?
     bool               m_fullscreen;     ///< Is the window in fullscreen?
     bool               m_cursorGrabbed;  ///< Is the mouse cursor trapped?
     bool               m_windowMapped;   ///< Has the window been mapped by the window manager?
@@ -332,4 +312,4 @@ private:
 } // namespace sf
 
 
-#endif // SFML_WINDOWIMPLX11_HPP
+#endif // SFML_WINDOWIMPL_EMSCRIPTEN_HPP

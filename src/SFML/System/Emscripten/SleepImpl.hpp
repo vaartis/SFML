@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2022 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2021 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,29 +22,31 @@
 //
 ////////////////////////////////////////////////////////////
 
-#ifndef SFML_INPUTIMPL_HPP
-#define SFML_INPUTIMPL_HPP
+#ifndef SFML_SLEEPIMPLEM_HPP
+#define SFML_SLEEPIMPLEM_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Config.hpp>
+#include <SFML/System/Time.hpp>
 
-#if defined(SFML_SYSTEM_WINDOWS)
-    #include <SFML/Window/Win32/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)\
-    || defined(SFML_SYSTEM_EMSCRIPTEN)
-    #if defined(SFML_USE_DRM)
-        #include <SFML/Window/DRM/InputImplUDev.hpp>
-    #else
-        #include <SFML/Window/Unix/InputImpl.hpp>
-    #endif
-#elif defined(SFML_SYSTEM_MACOS)
-    #include <SFML/Window/OSX/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_IOS)
-    #include <SFML/Window/iOS/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_ANDROID)
-    #include <SFML/Window/Android/InputImpl.hpp>
-#endif
 
-#endif // SFML_INPUTIMPL_HPP
+namespace sf
+{
+namespace priv
+{
+////////////////////////////////////////////////////////////
+/// \brief Unix implementation of sf::Sleep
+///
+/// \param time Time to sleep
+///
+////////////////////////////////////////////////////////////
+void sleepImpl(Time time);
+
+} // namespace priv
+
+} // namespace sf
+
+
+#endif // SFML_SLEEPIMPLEM_HPP

@@ -25,7 +25,7 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Window/Unix/WindowImplX11.hpp>
+#include <SFML/Window/Emscripten/WindowImplEmscripten.hpp>
 #include <SFML/Window/Unix/ClipboardImpl.hpp>
 #include <SFML/Window/Unix/Display.hpp>
 #include <SFML/Window/Unix/InputImpl.hpp>
@@ -48,21 +48,15 @@
 #include <libgen.h>
 #include <fcntl.h>
 #include <algorithm>
-#include <mutex>
-#include <ostream>
-#include <string>
 #include <vector>
-#include <cassert>
+#include <string>
 #include <cstring>
-#include <filesystem>
+#include <cassert>
+#include <mutex>
 
-#ifdef SFML_OPENGL_ES
-    #include <SFML/Window/EglContext.hpp>
-    using ContextType = sf::priv::EglContext;
-#else
-    #include <SFML/Window/Unix/GlxContext.hpp>
-    using ContextType = sf::priv::GlxContext;
-#endif
+#include <SFML/Window/EglContext.hpp>
+
+using ContextType = sf::priv::EglContext;
 
 ////////////////////////////////////////////////////////////
 // Private data
@@ -70,23 +64,25 @@
 namespace
 {
     // A nested named namespace is used here to allow unity builds of SFML.
-    namespace WindowsImplX11Impl
+    namespace WindowsImplEmscriptenImpl
     {
-        sf::priv::WindowImplX11*              fullscreenWindow = nullptr;
-        std::vector<sf::priv::WindowImplX11*> allWindows;
+        sf::priv::WindowImplEmscripten*              fullscreenWindow = nullptr;
+        std::vector<sf::priv::WindowImplEmscripten*> allWindows;
         std::recursive_mutex                  allWindowsMutex;
         sf::String                            windowManagerName;
 
         sf::String                            wmAbsPosGood[] = { "Enlightenment", "FVWM", "i3" };
 
-        constexpr unsigned long        eventMask = FocusChangeMask      | ButtonPressMask     |
-                                                   ButtonReleaseMask    | ButtonMotionMask    |
-                                                   PointerMotionMask    | KeyPressMask        |
-                                                   KeyReleaseMask       | StructureNotifyMask |
-                                                   EnterWindowMask      | LeaveWindowMask     |
-                                                   VisibilityChangeMask | PropertyChangeMask;
+    /*
+        static const unsigned long            eventMask = FocusChangeMask      | ButtonPressMask     |
+                                                        ButtonReleaseMask    | ButtonMotionMask    |
+                                                        PointerMotionMask    | KeyPressMask        |
+                                                        KeyReleaseMask       | StructureNotifyMask |
+                                                        EnterWindowMask      | LeaveWindowMask     |
+                                                        VisibilityChangeMask | PropertyChangeMask;
+    */
 
-        constexpr unsigned int         maxTrialsCount = 5;
+        static const unsigned int             maxTrialsCount = 5;
 
         // Predicate we use to find key repeat events in processEvent
         struct KeyRepeatFinder
@@ -102,199 +98,6 @@ namespace
             unsigned int keycode;
             Time time;
         };
-
-        // Filter the events received by windows (only allow those matching a specific window)
-        Bool checkEvent(::Display*, XEvent* event, XPointer userData)
-        {
-            // Just check if the event matches the window
-            // The input method sometimes sends ClientMessages with a different window ID,
-            // our event loop has to process them for the IM to work
-            return (event->xany.window == reinterpret_cast< ::Window >(userData)) || (event->type == ClientMessage);
-        }
-
-        // Find the name of the current executable
-        std::filesystem::path findExecutableName()
-        {
-            // We use /proc/self/cmdline to get the command line
-            // the user used to invoke this instance of the application
-            int file = ::open("/proc/self/cmdline", O_RDONLY | O_NONBLOCK);
-
-            if (file < 0)
-                return "sfml";
-
-            std::vector<char> buffer(256, 0);
-            std::size_t offset = 0;
-            ssize_t result = 0;
-
-            while ((result = read(file, &buffer[offset], 256)) > 0)
-            {
-                buffer.resize(buffer.size() + static_cast<std::size_t>(result), 0);
-                offset += static_cast<std::size_t>(result);
-            }
-
-            ::close(file);
-
-            if (offset)
-            {
-                buffer[offset] = 0;
-
-                // Remove the path to keep the executable name only
-                return basename(buffer.data());
-            }
-
-            // Default fallback name
-            return "sfml";
-        }
-
-        // Check if Extended Window Manager Hints are supported
-        bool ewmhSupported()
-        {
-            static bool checked = false;
-            static bool ewmhSupported = false;
-
-            if (checked)
-                return ewmhSupported;
-
-            checked = true;
-
-            Atom netSupportingWmCheck = sf::priv::getAtom("_NET_SUPPORTING_WM_CHECK", true);
-            Atom netSupported = sf::priv::getAtom("_NET_SUPPORTED", true);
-
-            if (!netSupportingWmCheck || !netSupported)
-                return false;
-
-            ::Display* display = sf::priv::OpenDisplay();
-
-            Atom actualType;
-            int actualFormat;
-            unsigned long numItems;
-            unsigned long numBytes;
-            unsigned char* data;
-
-            int result = XGetWindowProperty(display,
-                                            DefaultRootWindow(display),
-                                            netSupportingWmCheck,
-                                            0,
-                                            1,
-                                            False,
-                                            XA_WINDOW,
-                                            &actualType,
-                                            &actualFormat,
-                                            &numItems,
-                                            &numBytes,
-                                            &data);
-
-            if (result != Success || actualType != XA_WINDOW || numItems != 1)
-            {
-                if (result == Success)
-                    XFree(data);
-
-                sf::priv::CloseDisplay(display);
-                return false;
-            }
-
-            #pragma GCC diagnostic push
-            #pragma GCC diagnostic ignored "-Wcast-align"
-            ::Window rootWindow = *reinterpret_cast< ::Window* >(data);
-            #pragma GCC diagnostic pop
-
-            XFree(data);
-
-            if (!rootWindow)
-            {
-                sf::priv::CloseDisplay(display);
-                return false;
-            }
-
-            result = XGetWindowProperty(display,
-                                        rootWindow,
-                                        netSupportingWmCheck,
-                                        0,
-                                        1,
-                                        False,
-                                        XA_WINDOW,
-                                        &actualType,
-                                        &actualFormat,
-                                        &numItems,
-                                        &numBytes,
-                                        &data);
-
-            if (result != Success || actualType != XA_WINDOW || numItems != 1)
-            {
-                if (result == Success)
-                    XFree(data);
-
-                sf::priv::CloseDisplay(display);
-                return false;
-            }
-
-            #pragma GCC diagnostic push
-            #pragma GCC diagnostic ignored "-Wcast-align"
-            ::Window childWindow = *reinterpret_cast< ::Window* >(data);
-            #pragma GCC diagnostic pop
-
-            XFree(data);
-
-            if (!childWindow)
-            {
-                sf::priv::CloseDisplay(display);
-                return false;
-            }
-
-            // Conforming window managers should return the same window for both queries
-            if (rootWindow != childWindow)
-            {
-                sf::priv::CloseDisplay(display);
-                return false;
-            }
-
-            ewmhSupported = true;
-
-            // We try to get the name of the window manager
-            // for window manager specific workarounds
-            Atom netWmName = sf::priv::getAtom("_NET_WM_NAME", true);
-
-            if (!netWmName)
-            {
-                sf::priv::CloseDisplay(display);
-                return true;
-            }
-
-            Atom utf8StringType = sf::priv::getAtom("UTF8_STRING");
-
-            if (!utf8StringType)
-                utf8StringType = XA_STRING;
-
-            result = XGetWindowProperty(display,
-                                        rootWindow,
-                                        netWmName,
-                                        0,
-                                        0x7fffffff,
-                                        False,
-                                        utf8StringType,
-                                        &actualType,
-                                        &actualFormat,
-                                        &numItems,
-                                        &numBytes,
-                                        &data);
-
-            if (actualType && numItems)
-            {
-                // It seems the wm name string reply is not necessarily
-                // null-terminated. The work around is to get its actual
-                // length to build a proper string
-                const char* begin = reinterpret_cast<const char*>(data);
-                const char* end = begin + numItems;
-                windowManagerName = sf::String::fromUtf8(begin, end);
-            }
-
-            if (result == Success)
-                XFree(data);
-
-            sf::priv::CloseDisplay(display);
-
-            return true;
-        }
 
         // Get the parent window.
         ::Window getParentWindow(::Display* disp, ::Window win)
@@ -316,7 +119,7 @@ namespace
         bool getEWMHFrameExtents(::Display* disp, ::Window win,
             long& xFrameExtent, long& yFrameExtent)
         {
-            if (!ewmhSupported())
+            if (false)
                 return false;
 
             Atom frameExtents = sf::priv::getAtom("_NET_FRAME_EXTENTS", true);
@@ -371,7 +174,7 @@ namespace
         bool isWMAbsolutePositionGood()
         {
             // This can only work with EWMH, to get the name.
-            if (!ewmhSupported())
+            if (false)
                 return false;
 
             for (const sf::String& name : wmAbsPosGood)
@@ -501,71 +304,16 @@ namespace sf
 {
 namespace priv
 {
-////////////////////////////////////////////////////////////
-WindowImplX11::WindowImplX11(WindowHandle handle) :
-m_window         (0),
-m_screen         (0),
-m_inputMethod    (nullptr),
-m_inputContext   (nullptr),
-m_isExternal     (true),
-m_oldVideoMode   (0),
-m_oldRRCrtc      (0),
-m_hiddenCursor   (0),
-m_lastCursor     (None),
-m_keyRepeat      (true),
-m_previousSize   (-1, -1),
-m_useSizeHints   (false),
-m_fullscreen     (false),
-m_cursorGrabbed  (false),
-m_windowMapped   (false),
-m_iconPixmap     (0),
-m_iconMaskPixmap (0),
-m_lastInputTime  (0)
-{
-    using namespace WindowsImplX11Impl;
-
-    // Open a connection with the X server
-    m_display = OpenDisplay();
-
-    // Make sure to check for EWMH support before we do anything
-    ewmhSupported();
-
-    m_screen = DefaultScreen(m_display);
-
-    // Save the window handle
-    m_window = handle;
-
-    if (m_window)
-    {
-        // Make sure the window is listening to all the required events
-        XSetWindowAttributes attributes;
-        attributes.event_mask = eventMask;
-
-        XChangeWindowAttributes(m_display, m_window, CWEventMask, &attributes);
-
-        // Set the WM protocols
-        setProtocols();
-
-        // Do some common initializations
-        initialize();
-    }
-}
-
 
 ////////////////////////////////////////////////////////////
-WindowImplX11::WindowImplX11(VideoMode mode, const String& title, unsigned long style, const ContextSettings& settings) :
+WindowImplEmscripten::WindowImplEmscripten(VideoMode mode, const String& title, unsigned long style, const ContextSettings& /*settings*/) :
 m_window         (0),
 m_screen         (0),
 m_inputMethod    (nullptr),
 m_inputContext   (nullptr),
 m_isExternal     (false),
-m_oldVideoMode   (0),
-m_oldRRCrtc      (0),
-m_hiddenCursor   (0),
-m_lastCursor     (None),
 m_keyRepeat      (true),
 m_previousSize   (-1, -1),
-m_useSizeHints   (false),
 m_fullscreen     ((style & Style::Fullscreen) != 0),
 m_cursorGrabbed  (m_fullscreen),
 m_windowMapped   (false),
@@ -573,66 +321,20 @@ m_iconPixmap     (0),
 m_iconMaskPixmap (0),
 m_lastInputTime  (0)
 {
-    using namespace WindowsImplX11Impl;
+    using namespace WindowsImplEmscriptenImpl;
 
-    // Open a connection with the X server
-    m_display = OpenDisplay();
+    glfwInit();
 
-    // Make sure to check for EWMH support before we do anything
-    ewmhSupported();
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 1);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
 
-    m_screen = DefaultScreen(m_display);
+    m_glfwWindow = glfwCreateWindow(800, 600, title.toAnsiString().c_str(), nullptr, nullptr);
+    glfwMakeContextCurrent(m_glfwWindow);
 
-    // Compute position and size
-    Vector2i windowPosition;
-    if(m_fullscreen)
-    {
-        windowPosition = getPrimaryMonitorPosition();
-    }
-    else
-    {
-        windowPosition.x = (DisplayWidth(m_display, m_screen) - static_cast<int>(mode.width))  / 2;
-        windowPosition.y = (DisplayHeight(m_display, m_screen) - static_cast<int>(mode.height)) / 2;
-    }
-
-    unsigned int width  = mode.width;
-    unsigned int height = mode.height;
-
-    Visual* visual = nullptr;
-    int depth = 0;
-
-    // Check if the user chose to not create an OpenGL context (settings.attributeFlags will be 0xFFFFFFFF)
-    if (settings.attributeFlags == 0xFFFFFFFF)
-    {
-        // Choose default visual since the user is going to use their own rendering API
-        visual = DefaultVisual(m_display, m_screen);
-        depth = DefaultDepth(m_display, m_screen);
-    }
-    else
-    {
-        // Choose the visual according to the context settings
-        XVisualInfo visualInfo = ContextType::selectBestVisual(m_display, mode.bitsPerPixel, settings);
-
-        visual = visualInfo.visual;
-        depth = visualInfo.depth;
-    }
-
-    // Define the window attributes
-    XSetWindowAttributes attributes;
-    attributes.colormap = XCreateColormap(m_display, DefaultRootWindow(m_display), visual, AllocNone);
-    attributes.event_mask = eventMask;
-    attributes.override_redirect = (m_fullscreen && !ewmhSupported()) ? True : False;
-
-    m_window = XCreateWindow(m_display,
-                             DefaultRootWindow(m_display),
-                             windowPosition.x, windowPosition.y,
-                             width, height,
-                             0,
-                             depth,
-                             InputOutput,
-                             visual,
-                             CWEventMask | CWOverrideRedirect | CWColormap,
-                             &attributes);
+    int gles_version = gladLoadEGL(EGL_NO_DISPLAY, glfwGetProcAddress);
+    printf("GLES %d.%d\n", GLAD_VERSION_MAJOR(gles_version), GLAD_VERSION_MINOR(gles_version));
 
     if (!m_window)
     {
@@ -640,122 +342,15 @@ m_lastInputTime  (0)
         return;
     }
 
-    // Set the WM protocols
-    setProtocols();
-
-    // Set the WM initial state to the normal state
-    XWMHints* xHints = XAllocWMHints();
-    xHints->flags         = StateHint;
-    xHints->initial_state = NormalState;
-    XSetWMHints(m_display, m_window, xHints);
-    XFree(xHints);
-
-    // If not in fullscreen, set the window's style (tell the window manager to
-    // change our window's decorations and functions according to the requested style)
-    if (!m_fullscreen)
-    {
-        Atom WMHintsAtom = getAtom("_MOTIF_WM_HINTS", false);
-        if (WMHintsAtom)
-        {
-            constexpr unsigned long MWM_HINTS_FUNCTIONS   = 1 << 0;
-            constexpr unsigned long MWM_HINTS_DECORATIONS = 1 << 1;
-
-            //constexpr unsigned long MWM_DECOR_ALL         = 1 << 0;
-            constexpr unsigned long MWM_DECOR_BORDER      = 1 << 1;
-            constexpr unsigned long MWM_DECOR_RESIZEH     = 1 << 2;
-            constexpr unsigned long MWM_DECOR_TITLE       = 1 << 3;
-            constexpr unsigned long MWM_DECOR_MENU        = 1 << 4;
-            constexpr unsigned long MWM_DECOR_MINIMIZE    = 1 << 5;
-            constexpr unsigned long MWM_DECOR_MAXIMIZE    = 1 << 6;
-
-            //constexpr unsigned long MWM_FUNC_ALL          = 1 << 0;
-            constexpr unsigned long MWM_FUNC_RESIZE       = 1 << 1;
-            constexpr unsigned long MWM_FUNC_MOVE         = 1 << 2;
-            constexpr unsigned long MWM_FUNC_MINIMIZE     = 1 << 3;
-            constexpr unsigned long MWM_FUNC_MAXIMIZE     = 1 << 4;
-            constexpr unsigned long MWM_FUNC_CLOSE        = 1 << 5;
-
-            struct WMHints
-            {
-                unsigned long flags;
-                unsigned long functions;
-                unsigned long decorations;
-                long          inputMode;
-                unsigned long state;
-            };
-
-            WMHints hints;
-            std::memset(&hints, 0, sizeof(hints));
-            hints.flags       = MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS;
-            hints.decorations = 0;
-            hints.functions   = 0;
-
-            if (style & Style::Titlebar)
-            {
-                hints.decorations |= MWM_DECOR_BORDER | MWM_DECOR_TITLE | MWM_DECOR_MINIMIZE | MWM_DECOR_MENU;
-                hints.functions   |= MWM_FUNC_MOVE | MWM_FUNC_MINIMIZE;
-            }
-            if (style & Style::Resize)
-            {
-                hints.decorations |= MWM_DECOR_MAXIMIZE | MWM_DECOR_RESIZEH;
-                hints.functions   |= MWM_FUNC_MAXIMIZE | MWM_FUNC_RESIZE;
-            }
-            if (style & Style::Close)
-            {
-                hints.decorations |= 0;
-                hints.functions   |= MWM_FUNC_CLOSE;
-            }
-
-            XChangeProperty(m_display,
-                            m_window,
-                            WMHintsAtom,
-                            WMHintsAtom,
-                            32,
-                            PropModeReplace,
-                            reinterpret_cast<const unsigned char*>(&hints),
-                            5);
-        }
-    }
-
-    // This is a hack to force some windows managers to disable resizing
-    if (!(style & Style::Resize))
-    {
-        m_useSizeHints = true;
-        XSizeHints* sizeHints = XAllocSizeHints();
-        sizeHints->flags = PMinSize | PMaxSize | USPosition;
-        sizeHints->min_width  = sizeHints->max_width  = static_cast<int>(width);
-        sizeHints->min_height = sizeHints->max_height = static_cast<int>(height);
-        sizeHints->x = windowPosition.x;
-        sizeHints->y = windowPosition.y;
-        XSetWMNormalHints(m_display, m_window, sizeHints);
-        XFree(sizeHints);
-    }
-
-    // Set the window's WM class (this can be used by window managers)
-    XClassHint* hint = XAllocClassHint();
-
-    // The instance name should be something unique to this invocation
-    // of the application but is rarely if ever used these days.
-    // For simplicity, we retrieve it via the base executable name.
-    std::string executableName = findExecutableName().string();
-    std::vector<char> windowInstance(executableName.size() + 1, 0);
-    std::copy(executableName.begin(), executableName.end(), windowInstance.begin());
-    hint->res_name = windowInstance.data();
-
     // The class name identifies a class of windows that
     // "are of the same type". We simply use the initial window name as
     // the class name.
-    std::string ansiTitle = title.toAnsiString();
-    std::vector<char> windowClass(ansiTitle.size() + 1, 0);
-    std::copy(ansiTitle.begin(), ansiTitle.end(), windowClass.begin());
-    hint->res_class = windowClass.data();
-
-    XSetClassHint(m_display, m_window, hint);
-
-    XFree(hint);
+    //std::string ansiTitle = title.toAnsiString();
+    //std::vector<char> windowClass(ansiTitle.size() + 1, 0);
+    //std::copy(ansiTitle.begin(), ansiTitle.end(), windowClass.begin());
 
     // Set the window's name
-    setTitle(title);
+    //setTitle(title);
 
     // Do some common initializations
     initialize();
@@ -779,9 +374,9 @@ m_lastInputTime  (0)
 
 
 ////////////////////////////////////////////////////////////
-WindowImplX11::~WindowImplX11()
+WindowImplEmscripten::~WindowImplEmscripten()
 {
-    using namespace WindowsImplX11Impl;
+    using namespace WindowsImplEmscriptenImpl;
 
     // Cleanup graphical resources
     cleanup();
@@ -793,10 +388,6 @@ WindowImplX11::~WindowImplX11()
     // Destroy icon mask pixmap
     if (m_iconMaskPixmap)
         XFreePixmap(m_display, m_iconMaskPixmap);
-
-    // Destroy the cursor
-    if (m_hiddenCursor)
-        XFreeCursor(m_display, m_hiddenCursor);
 
     // Destroy the input context
     if (m_inputContext)
@@ -823,22 +414,22 @@ WindowImplX11::~WindowImplX11()
 
 
 ////////////////////////////////////////////////////////////
-WindowHandle WindowImplX11::getSystemHandle() const
+WindowHandle WindowImplEmscripten::getSystemHandle() const
 {
     return m_window;
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::processEvents()
+void WindowImplEmscripten::processEvents()
 {
-    using namespace WindowsImplX11Impl;
+    using namespace WindowsImplEmscriptenImpl;
 
     XEvent event;
 
     // Pick out the events that are interesting for this window
-    while (XCheckIfEvent(m_display, &event, &checkEvent, reinterpret_cast<XPointer>(m_window)))
-        m_events.push_back(event);
+    //while (XCheckIfEvent(m_display, &event, &checkEvent, reinterpret_cast<XPointer>(m_window)))
+    //    m_events.push_back(event);
 
     // Handle the events for this window that we just picked out
     while (!m_events.empty())
@@ -847,16 +438,13 @@ void WindowImplX11::processEvents()
         m_events.pop_front();
         processEvent(event);
     }
-
-    // Process clipboard window events
-    priv::ClipboardImpl::processEvents();
 }
 
 
 ////////////////////////////////////////////////////////////
-Vector2i WindowImplX11::getPosition() const
+Vector2i WindowImplEmscripten::getPosition() const
 {
-    using namespace WindowsImplX11Impl;
+    using namespace WindowsImplEmscriptenImpl;
 
     // Get absolute position of our window relative to root window. This
     // takes into account all information that X11 has, including X11
@@ -923,7 +511,7 @@ Vector2i WindowImplX11::getPosition() const
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setPosition(const Vector2i& position)
+void WindowImplEmscripten::setPosition(const Vector2i& position)
 {
     XMoveWindow(m_display, m_window, position.x, position.y);
     XFlush(m_display);
@@ -931,87 +519,36 @@ void WindowImplX11::setPosition(const Vector2i& position)
 
 
 ////////////////////////////////////////////////////////////
-Vector2u WindowImplX11::getSize() const
+Vector2u WindowImplEmscripten::getSize() const
 {
-    XWindowAttributes attributes;
-    XGetWindowAttributes(m_display, m_window, &attributes);
-    return Vector2u(Vector2i(attributes.width, attributes.height));
+    Int32 width, height;
+    emscripten_get_screen_size(&width, &height);
+
+    return Vector2u(Vector2i(width, height));
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setSize(const Vector2u& size)
+void WindowImplEmscripten::setSize(const Vector2u& /*size*/)
 {
-    // If resizing is disable for the window we have to update the size hints (required by some window managers).
-    if (m_useSizeHints)
-    {
-        XSizeHints* sizeHints = XAllocSizeHints();
-        sizeHints->flags = PMinSize | PMaxSize;
-        sizeHints->min_width  = sizeHints->max_width  = static_cast<int>(size.x);
-        sizeHints->min_height = sizeHints->max_height = static_cast<int>(size.y);
-        XSetWMNormalHints(m_display, m_window, sizeHints);
-        XFree(sizeHints);
-    }
-
-    XResizeWindow(m_display, m_window, size.x, size.y);
-    XFlush(m_display);
+    // Stub
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setTitle(const String& title)
+void WindowImplEmscripten::setTitle(const String& title)
 {
-    // Bare X11 has no Unicode window title support.
-    // There is however an option to tell the window manager your Unicode title via hints.
-
-    // Convert to UTF-8 encoding.
-    std::basic_string<Uint8> utf8Title;
-    Utf32::toUtf8(title.begin(), title.end(), std::back_inserter(utf8Title));
-
-    Atom useUtf8 = getAtom("UTF8_STRING", false);
-
-    // Set the _NET_WM_NAME atom, which specifies a UTF-8 encoded window title.
-    Atom wmName = getAtom("_NET_WM_NAME", false);
-    XChangeProperty(m_display, m_window, wmName, useUtf8, 8,
-                    PropModeReplace, utf8Title.c_str(), static_cast<int>(utf8Title.size()));
-
-    // Set the _NET_WM_ICON_NAME atom, which specifies a UTF-8 encoded window title.
-    Atom wmIconName = getAtom("_NET_WM_ICON_NAME", false);
-    XChangeProperty(m_display, m_window, wmIconName, useUtf8, 8,
-                    PropModeReplace, utf8Title.c_str(), static_cast<int>(utf8Title.size()));
-
-    // Set the non-Unicode title as a fallback for window managers who don't support _NET_WM_NAME.
-    #ifdef X_HAVE_UTF8_STRING
-    Xutf8SetWMProperties(m_display,
-                         m_window,
-                         title.toAnsiString().c_str(),
-                         title.toAnsiString().c_str(),
-                         nullptr,
-                         0,
-                         nullptr,
-                         nullptr,
-                         nullptr);
-    #else
-    XmbSetWMProperties(m_display,
-                       m_window,
-                       title.toAnsiString().c_str(),
-                       title.toAnsiString().c_str(),
-                       nullptr,
-                       0,
-                       nullptr,
-                       nullptr,
-                       nullptr);
-    #endif
+    emscripten_set_window_title(title.toAnsiString().c_str());
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setIcon(unsigned int width, unsigned int height, const Uint8* pixels)
+void WindowImplEmscripten::setIcon(unsigned int width, unsigned int height, const Uint8* pixels)
 {
     // X11 wants BGRA pixels: swap red and blue channels
     // Note: this memory will be freed by XDestroyImage
-    auto* iconPixels = static_cast<Uint8*>(std::malloc(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4));
-    for (std::size_t i = 0; i < static_cast<std::size_t>(width) * static_cast<std::size_t>(height); ++i)
+    auto* iconPixels = static_cast<Uint8*>(std::malloc(width * height * 4));
+    for (std::size_t i = 0; i < width * height; ++i)
     {
         iconPixels[i * 4 + 0] = pixels[i * 4 + 2];
         iconPixels[i * 4 + 1] = pixels[i * 4 + 1];
@@ -1080,7 +617,7 @@ void WindowImplX11::setIcon(unsigned int width, unsigned int height, const Uint8
     *ptr++ = height;
     #pragma GCC diagnostic pop
 
-    for (std::size_t i = 0; i < static_cast<std::size_t>(width) * static_cast<std::size_t>(height); ++i)
+    for (std::size_t i = 0; i < width * height; ++i)
     {
         *ptr++ = static_cast<unsigned long>((pixels[i * 4 + 2] << 0 ) |
                                             (pixels[i * 4 + 1] << 8 ) |
@@ -1104,102 +641,44 @@ void WindowImplX11::setIcon(unsigned int width, unsigned int height, const Uint8
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setVisible(bool visible)
+void WindowImplEmscripten::setVisible(bool /*visible*/)
 {
-    if (visible)
-    {
-        XMapWindow(m_display, m_window);
-
-        if(m_fullscreen)
-            switchToFullscreen();
-
-        XFlush(m_display);
-
-        // Before continuing, make sure the WM has
-        // internally marked the window as viewable
-        while (!m_windowMapped && !m_isExternal)
-            processEvents();
-    }
-    else
-    {
-        XUnmapWindow(m_display, m_window);
-
-        XFlush(m_display);
-
-        // Before continuing, make sure the WM has
-        // internally marked the window as unviewable
-        while (m_windowMapped && !m_isExternal)
-            processEvents();
-    }
+    // Stub
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setMouseCursorVisible(bool visible)
+void WindowImplEmscripten::setMouseCursorVisible(bool /*visible*/)
 {
-    XDefineCursor(m_display, m_window, visible ? m_lastCursor : m_hiddenCursor);
-    XFlush(m_display);
+    // Stub
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setMouseCursor(const CursorImpl& cursor)
+void WindowImplEmscripten::setMouseCursor(const CursorImpl& /* cursor */)
 {
-    m_lastCursor = cursor.m_cursor;
-    XDefineCursor(m_display, m_window, m_lastCursor);
-    XFlush(m_display);
+    // Stub
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setMouseCursorGrabbed(bool grabbed)
+void WindowImplEmscripten::setMouseCursorGrabbed(bool /*grabbed*/)
 {
-    using namespace WindowsImplX11Impl;
-
-    // This has no effect in fullscreen mode
-    if (m_fullscreen || (m_cursorGrabbed == grabbed))
-        return;
-
-    if (grabbed)
-    {
-        // Try multiple times to grab the cursor
-        for (unsigned int trial = 0; trial < maxTrialsCount; ++trial)
-        {
-            int result = XGrabPointer(m_display, m_window, True, None, GrabModeAsync, GrabModeAsync, m_window, None, CurrentTime);
-
-            if (result == GrabSuccess)
-            {
-                m_cursorGrabbed = true;
-                break;
-            }
-
-            // The cursor grab failed, trying again after a small sleep
-            sf::sleep(sf::milliseconds(50));
-        }
-
-        if (!m_cursorGrabbed)
-            err() << "Failed to grab mouse cursor" << std::endl;
-    }
-    else
-    {
-        // Release the cursor from the window and disable cursor grabbing
-        XUngrabPointer(m_display, CurrentTime);
-        m_cursorGrabbed = false;
-    }
+    // Stub
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setKeyRepeatEnabled(bool enabled)
+void WindowImplEmscripten::setKeyRepeatEnabled(bool enabled)
 {
     m_keyRepeat = enabled;
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::requestFocus()
+void WindowImplEmscripten::requestFocus()
 {
-    using namespace WindowsImplX11Impl;
+    using namespace WindowsImplEmscriptenImpl;
 
     // Focus is only stolen among SFML windows, not between applications
     // Check the global list of windows to find out whether an SFML window has the focus
@@ -1208,7 +687,7 @@ void WindowImplX11::requestFocus()
 
     {
         std::scoped_lock lock(allWindowsMutex);
-        for (sf::priv::WindowImplX11* windowPtr : allWindows)
+        for (sf::priv::WindowImplEmscripten* windowPtr : allWindows)
         {
             if (windowPtr->hasFocus())
             {
@@ -1252,7 +731,7 @@ void WindowImplX11::requestFocus()
 
 
 ////////////////////////////////////////////////////////////
-bool WindowImplX11::hasFocus() const
+bool WindowImplEmscripten::hasFocus() const
 {
     ::Window focusedWindow = 0;
     int revertToReturn = 0;
@@ -1263,60 +742,16 @@ bool WindowImplX11::hasFocus() const
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::grabFocus()
+void WindowImplEmscripten::grabFocus()
 {
-    using namespace WindowsImplX11Impl;
-
-    Atom netActiveWindow = None;
-
-    if (ewmhSupported())
-        netActiveWindow = getAtom("_NET_ACTIVE_WINDOW");
-
-    // Only try to grab focus if the window is mapped
-    XWindowAttributes attr;
-
-    XGetWindowAttributes(m_display, m_window, &attr);
-
-    if (attr.map_state == IsUnmapped)
-        return;
-
-    if (netActiveWindow)
-    {
-        XEvent event;
-        std::memset(&event, 0, sizeof(event));
-
-        event.type = ClientMessage;
-        event.xclient.window = m_window;
-        event.xclient.format = 32;
-        event.xclient.message_type = netActiveWindow;
-        event.xclient.data.l[0] = 1; // Normal application
-        event.xclient.data.l[1] = static_cast<long>(m_lastInputTime);
-        event.xclient.data.l[2] = 0; // We don't know the currently active window
-
-        int result = XSendEvent(m_display,
-                                DefaultRootWindow(m_display),
-                                False,
-                                SubstructureNotifyMask | SubstructureRedirectMask,
-                                &event);
-
-        XFlush(m_display);
-
-        if (!result)
-            err() << "Setting fullscreen failed, could not send \"_NET_ACTIVE_WINDOW\" event" << std::endl;
-    }
-    else
-    {
-        XRaiseWindow(m_display, m_window);
-        XSetInputFocus(m_display, m_window, RevertToPointerRoot, CurrentTime);
-        XFlush(m_display);
-    }
+    // Stub
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setVideoMode(const VideoMode& mode)
+void WindowImplEmscripten::setVideoMode(const VideoMode& mode)
 {
-    using namespace WindowsImplX11Impl;
+    using namespace WindowsImplEmscriptenImpl;
 
     // Skip mode switching if the new mode is equal to the desktop mode
     if (mode == VideoMode::getDesktopMode())
@@ -1373,7 +808,7 @@ void WindowImplX11::setVideoMode(const VideoMode& mode)
     bool modeFound = false;
     RRMode xRandMode;
 
-    for (int i = 0; (i < res->nmode) && !modeFound; ++i)
+    for (int i = 0; (i < res->nmode) && !modeFound; i++)
     {
         if (crtcInfo->rotation == RR_Rotate_90 || crtcInfo->rotation == RR_Rotate_270)
             std::swap(res->modes[i].height, res->modes[i].width);
@@ -1423,9 +858,9 @@ void WindowImplX11::setVideoMode(const VideoMode& mode)
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::resetVideoMode()
+void WindowImplEmscripten::resetVideoMode()
 {
-    using namespace WindowsImplX11Impl;
+    using namespace WindowsImplEmscriptenImpl;
 
     if (fullscreenWindow == this)
     {
@@ -1489,19 +924,19 @@ void WindowImplX11::resetVideoMode()
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::switchToFullscreen()
+void WindowImplEmscripten::switchToFullscreen()
 {
-    using namespace WindowsImplX11Impl;
+    using namespace WindowsImplEmscriptenImpl;
 
     grabFocus();
 
-    if (ewmhSupported())
+    if (false)
     {
         Atom netWmBypassCompositor = getAtom("_NET_WM_BYPASS_COMPOSITOR");
 
         if (netWmBypassCompositor)
         {
-            constexpr unsigned long bypassCompositor = 1;
+            static const unsigned long bypassCompositor = 1;
 
             XChangeProperty(m_display,
                             m_window,
@@ -1547,126 +982,12 @@ void WindowImplX11::switchToFullscreen()
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::setProtocols()
+void WindowImplEmscripten::initialize()
 {
-    using namespace WindowsImplX11Impl;
-
-    Atom wmProtocols = getAtom("WM_PROTOCOLS");
-    Atom wmDeleteWindow = getAtom("WM_DELETE_WINDOW");
-
-    if (!wmProtocols)
-    {
-        err() << "Failed to request WM_PROTOCOLS atom." << std::endl;
-        return;
-    }
-
-    std::vector<Atom> atoms;
-
-    if (wmDeleteWindow)
-    {
-        atoms.push_back(wmDeleteWindow);
-    }
-    else
-    {
-        err() << "Failed to request WM_DELETE_WINDOW atom." << std::endl;
-    }
-
-    Atom netWmPing = None;
-    Atom netWmPid = None;
-
-    if (ewmhSupported())
-    {
-        netWmPing = getAtom("_NET_WM_PING", true);
-        netWmPid = getAtom("_NET_WM_PID", true);
-    }
-
-    if (netWmPing && netWmPid)
-    {
-        const long pid = getpid();
-
-        XChangeProperty(m_display,
-                        m_window,
-                        netWmPid,
-                        XA_CARDINAL,
-                        32,
-                        PropModeReplace,
-                        reinterpret_cast<const unsigned char*>(&pid),
-                        1);
-
-        atoms.push_back(netWmPing);
-    }
-
-    if (!atoms.empty())
-    {
-        XChangeProperty(m_display,
-                        m_window,
-                        wmProtocols,
-                        XA_ATOM,
-                        32,
-                        PropModeReplace,
-                        reinterpret_cast<const unsigned char*>(atoms.data()),
-                        static_cast<int>(atoms.size()));
-    }
-    else
-    {
-        err() << "Didn't set any window protocols" << std::endl;
-    }
-}
-
-
-////////////////////////////////////////////////////////////
-void WindowImplX11::initialize()
-{
-    using namespace WindowsImplX11Impl;
-
-    // Create the input context
-    m_inputMethod = OpenXIM();
-
-    if (m_inputMethod)
-    {
-        m_inputContext = XCreateIC(m_inputMethod,
-                                   XNClientWindow,
-                                   m_window,
-                                   XNFocusWindow,
-                                   m_window,
-                                   XNInputStyle,
-                                   XIMPreeditNothing | XIMStatusNothing,
-                                   nullptr);
-    }
-    else
-    {
-        m_inputContext = nullptr;
-    }
+    using namespace WindowsImplEmscriptenImpl;
 
     if (!m_inputContext)
         err() << "Failed to create input context for window -- TextEntered event won't be able to return unicode" << std::endl;
-
-    Atom wmWindowType = getAtom("_NET_WM_WINDOW_TYPE", false);
-    Atom wmWindowTypeNormal = getAtom("_NET_WM_WINDOW_TYPE_NORMAL", false);
-
-    if (wmWindowType && wmWindowTypeNormal)
-    {
-        XChangeProperty(m_display,
-                        m_window,
-                        wmWindowType,
-                        XA_ATOM,
-                        32,
-                        PropModeReplace,
-                        reinterpret_cast<const unsigned char*>(&wmWindowTypeNormal),
-                        1);
-    }
-
-    // Show the window
-    setVisible(true);
-
-    // Raise the window and grab input focus
-    grabFocus();
-
-    // Create the hidden cursor
-    createHiddenCursor();
-
-    // Flush the commands queue
-    XFlush(m_display);
 
     // Add this window to the global list of windows (required for focus request)
     std::scoped_lock lock(allWindowsMutex);
@@ -1675,7 +996,7 @@ void WindowImplX11::initialize()
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::updateLastInputTime(::Time time)
+void WindowImplEmscripten::updateLastInputTime(::Time time)
 {
     if (time && (time != m_lastInputTime))
     {
@@ -1699,27 +1020,7 @@ void WindowImplX11::updateLastInputTime(::Time time)
 
 
 ////////////////////////////////////////////////////////////
-void WindowImplX11::createHiddenCursor()
-{
-    // Create the cursor's pixmap (1x1 pixels)
-    Pixmap cursorPixmap = XCreatePixmap(m_display, m_window, 1, 1, 1);
-    GC graphicsContext = XCreateGC(m_display, cursorPixmap, 0, nullptr);
-    XDrawPoint(m_display, cursorPixmap, graphicsContext, 0, 0);
-    XFreeGC(m_display, graphicsContext);
-
-    // Create the cursor, using the pixmap as both the shape and the mask of the cursor
-    XColor color;
-    color.flags = DoRed | DoGreen | DoBlue;
-    color.red = color.blue = color.green = 0;
-    m_hiddenCursor = XCreatePixmapCursor(m_display, cursorPixmap, cursorPixmap, &color, &color, 0, 0);
-
-    // We don't need the pixmap any longer, free it
-    XFreePixmap(m_display, cursorPixmap);
-}
-
-
-////////////////////////////////////////////////////////////
-void WindowImplX11::cleanup()
+void WindowImplEmscripten::cleanup()
 {
     // Restore the previous video mode (in case we were running in fullscreen)
     resetVideoMode();
@@ -1730,9 +1031,9 @@ void WindowImplX11::cleanup()
 
 
 ////////////////////////////////////////////////////////////
-bool WindowImplX11::processEvent(XEvent& windowEvent)
+bool WindowImplEmscripten::processEvent(XEvent& windowEvent)
 {
-    using namespace WindowsImplX11Impl;
+    using namespace WindowsImplEmscriptenImpl;
 
     // This function implements a workaround to properly discard
     // repeated key events when necessary. The problem is that the
@@ -1867,7 +1168,7 @@ bool WindowImplX11::processEvent(XEvent& windowEvent)
                 if (windowEvent.xclient.message_type == wmProtocols)
                 {
                     static Atom wmDeleteWindow = getAtom("WM_DELETE_WINDOW");
-                    static Atom netWmPing = ewmhSupported() ? getAtom("_NET_WM_PING", true) : None;
+                    static Atom netWmPing = false ? getAtom("_NET_WM_PING", true) : None;
 
                     if ((windowEvent.xclient.format == 32) && (windowEvent.xclient.data.l[0]) == static_cast<long>(wmDeleteWindow))
                     {
@@ -2163,7 +1464,7 @@ bool WindowImplX11::processEvent(XEvent& windowEvent)
 
 
 ////////////////////////////////////////////////////////////
-bool WindowImplX11::checkXRandR(int& xRandRMajor, int& xRandRMinor)
+bool WindowImplEmscripten::checkXRandR(int& xRandRMajor, int& xRandRMinor)
 {
     // Check if the XRandR extension is present
     int version;
@@ -2193,7 +1494,7 @@ bool WindowImplX11::checkXRandR(int& xRandRMajor, int& xRandRMinor)
 
 /*
 ////////////////////////////////////////////////////////////
-RROutput WindowImplX11::getOutputPrimary(::Window& rootWindow, XRRScreenResources* res, int xRandRMajor, int xRandRMinor)
+RROutput WindowImplEmscripten::getOutputPrimary(::Window& rootWindow, XRRScreenResources* res, int xRandRMajor, int xRandRMinor)
 {
     // if xRandR version >= 1.3 get the primary screen else take the first screen
     if ((xRandRMajor == 1 && xRandRMinor >= 3) || xRandRMajor > 1)
@@ -2214,7 +1515,7 @@ RROutput WindowImplX11::getOutputPrimary(::Window& rootWindow, XRRScreenResource
 
 
 ////////////////////////////////////////////////////////////
-Vector2i WindowImplX11::getPrimaryMonitorPosition()
+Vector2i WindowImplEmscripten::getPrimaryMonitorPosition()
 {
     Vector2i monitorPosition;
 

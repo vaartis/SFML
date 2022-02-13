@@ -29,6 +29,7 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Config.hpp>
+
 #include <glad/gl.h>
 
 #ifdef SFML_OPENGL_ES
@@ -80,10 +81,12 @@
     // The following extensions are optional.
 
     // Core since 2.0 - OES_blend_func_separate
+
     #define GLEXT_blend_func_separate                 SF_GLAD_GL_OES_blend_func_separate
     #define GLEXT_glBlendFuncSeparate                 glBlendFuncSeparateOES
 
     // Core since 2.0 - OES_blend_equation_separate
+
     #define GLEXT_blend_equation_separate             SF_GLAD_GL_OES_blend_equation_separate
     #define GLEXT_glBlendEquationSeparate             glBlendEquationSeparateOES
 
@@ -92,6 +95,7 @@
 
     // Core since 2.0 - OES_framebuffer_object
     #define GLEXT_framebuffer_object                  SF_GLAD_GL_OES_framebuffer_object
+
     #define GLEXT_glBindRenderbuffer                  glBindRenderbufferOES
     #define GLEXT_glDeleteRenderbuffers               glDeleteRenderbuffersOES
     #define GLEXT_glGenRenderbuffers                  glGenRenderbuffersOES
@@ -103,6 +107,7 @@
     #define GLEXT_glFramebufferTexture2D              glFramebufferTexture2DOES
     #define GLEXT_glFramebufferRenderbuffer           glFramebufferRenderbufferOES
     #define GLEXT_glGenerateMipmap                    glGenerateMipmapOES
+
     #define GLEXT_GL_FRAMEBUFFER                      GL_FRAMEBUFFER_OES
     #define GLEXT_GL_RENDERBUFFER                     GL_RENDERBUFFER_OES
     #define GLEXT_GL_DEPTH_COMPONENT                  GL_DEPTH_COMPONENT16_OES
@@ -111,6 +116,7 @@
     #define GLEXT_GL_FRAMEBUFFER_COMPLETE             GL_FRAMEBUFFER_COMPLETE_OES
     #define GLEXT_GL_FRAMEBUFFER_BINDING              GL_FRAMEBUFFER_BINDING_OES
     #define GLEXT_GL_INVALID_FRAMEBUFFER_OPERATION    GL_INVALID_FRAMEBUFFER_OPERATION_OES
+
 
     // Core since 3.0
     #define GLEXT_packed_depth_stencil                SF_GLAD_GL_OES_packed_depth_stencil
